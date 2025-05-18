@@ -1,0 +1,562 @@
+"use client"
+
+import { useRef, useState, useEffect } from "react"
+import { useFrame } from "@react-three/fiber"
+import { Html } from "@react-three/drei"
+import * as THREE from "three"
+
+// Realistic Dog Model - Enhanced with blinking, facial expressions, and better connections
+export const RealisticDogComponent = ({
+  color = "golden",
+  emotion,
+  onInteract,
+  isTalking = false,
+  activeAccessory = null,
+}) => {
+  const group = useRef()
+  const [hovered, setHovered] = useState(false)
+  const [breathingScale, setBreathingScale] = useState(1)
+  const [tailWag, setTailWag] = useState(0)
+  const [headTilt, setHeadTilt] = useState(0)
+  const [earTwitch, setEarTwitch] = useState(0)
+  const [mouthOpen, setMouthOpen] = useState(0)
+  const [legRaise, setLegRaise] = useState(0)
+  const [bodyBounce, setBodyBounce] = useState(0)
+  const [eyeBlink, setEyeBlink] = useState(0)
+  const [eyebrowRaise, setEyebrowRaise] = useState(0)
+  const [danceMoves, setDanceMoves] = useState(0)
+  const [walkCycle, setWalkCycle] = useState(0)
+  const [walkDirection, setWalkDirection] = useState(new THREE.Vector3(0, 0, 0))
+  const [isWalking, setIsWalking] = useState(false)
+  const [walkTarget, setWalkTarget] = useState(null)
+  const [tears, setTears] = useState(0) // For sad emotion
+  const [jumpHeight, setJumpHeight] = useState(0) // For jumping animation
+  const [isJumping, setIsJumping] = useState(false)
+  const [showEmotionParticles, setShowEmotionParticles] = useState(false)
+
+  // Position state for walking animation
+  const [position, setPosition] = useState([0, -0.5, 0])
+
+  // Color mapping
+  const colorMap = {
+    golden: "#D4A76A",
+    brown: "#8B4513",
+    black: "#2D2D2D",
+    white: "#F5F5F5",
+    gray: "#808080",
+  }
+
+  const mainColor = colorMap[color] || colorMap.golden
+  const secondaryColor = hovered ? new THREE.Color(mainColor).offsetHSL(0, 0.1, 0.1).getStyle() : mainColor
+  const darkColor = new THREE.Color(mainColor).offsetHSL(0, 0, -0.2).getStyle()
+  const lightColor = new THREE.Color(mainColor).offsetHSL(0, -0.1, 0.2).getStyle()
+
+  // Show emotion particles when emotion changes
+  useEffect(() => {
+    setShowEmotionParticles(true)
+    const timeout = setTimeout(() => {
+      setShowEmotionParticles(false)
+    }, 3000) // Show particles for 3 seconds
+    return () => clearTimeout(timeout)
+  }, [emotion])
+
+  // Blinking effect
+  useEffect(() => {
+    const blinkInterval = setInterval(
+      () => {
+        // Quick blink animation
+        setEyeBlink(1)
+        setTimeout(() => setEyeBlink(0), 150)
+      },
+      Math.random() * 3000 + 2000,
+    ) // Random blink between 2-5 seconds
+
+    return () => clearInterval(blinkInterval)
+  }, [])
+
+  // Talking mouth animation
+  useEffect(() => {
+    if (isTalking) {
+      const talkingInterval = setInterval(() => {
+        setMouthOpen(Math.random() * 0.3 + 0.1) // Random mouth movement
+      }, 150)
+
+      return () => clearInterval(talkingInterval)
+    }
+  }, [isTalking])
+
+  // Random walking behavior
+  useEffect(() => {
+    // Start random walking after a delay
+    const walkTimeout = setTimeout(
+      () => {
+        if (Math.random() > 0.7) {
+          // 30% chance to start walking
+          const randomX = (Math.random() - 0.5) * 4
+          const randomZ = (Math.random() - 0.5) * 4
+          setWalkTarget(new THREE.Vector3(randomX, -0.5, randomZ))
+          setIsWalking(true)
+        }
+      },
+      Math.random() * 10000 + 5000,
+    ) // Random delay between 5-15 seconds
+
+    return () => clearTimeout(walkTimeout)
+  }, [isWalking])
+
+  // Jump animation effect
+  useEffect(() => {
+    if (emotion === "excited" || emotion === "happy") {
+      const jumpChance = Math.random()
+      if (jumpChance > 0.9) {
+        setIsJumping(true)
+
+        // Jump animation
+        const jumpUp = () => {
+          let height = 0
+          const jumpInterval = setInterval(() => {
+            height += 0.05
+            setJumpHeight(height)
+            if (height >= 0.5) {
+              clearInterval(jumpInterval)
+              jumpDown()
+            }
+          }, 50)
+        }
+
+        const jumpDown = () => {
+          let height = 0.5
+          const fallInterval = setInterval(() => {
+            height -= 0.05
+            setJumpHeight(height)
+            if (height <= 0) {
+              clearInterval(fallInterval)
+              setJumpHeight(0)
+              setIsJumping(false)
+            }
+          }, 50)
+        }
+
+        jumpUp()
+      }
+    }
+  }, [emotion])
+
+  // Animations based on emotion
+  useFrame((state) => {
+    if (group.current) {
+      const time = state.clock.getElapsedTime()
+
+      // Basic breathing animation
+      const breathing = Math.sin(time * 1.5) * 0.015
+      setBreathingScale(1 + breathing)
+
+      // Walking animation
+      if (isWalking && walkTarget) {
+        // Calculate direction to target
+        const currentPos = new THREE.Vector3(position[0], position[1], position[2])
+        const direction = new THREE.Vector3().subVectors(walkTarget, currentPos).normalize()
+        setWalkDirection(direction)
+
+        // Move towards target
+        const speed = 0.02
+        const newPos = [position[0] + direction.x * speed, position[1], position[2] + direction.z * speed]
+        setPosition(newPos)
+
+        // Update walk cycle for leg animation
+        setWalkCycle((prev) => (prev + 0.1) % (Math.PI * 2))
+
+        // Rotate to face walking direction
+        if (group.current) {
+          group.current.rotation.y = Math.atan2(direction.x, direction.z)
+        }
+
+        // Check if we've reached the target
+        const distanceToTarget = currentPos.distanceTo(walkTarget)
+        if (distanceToTarget < 0.1) {
+          setIsWalking(false)
+          setWalkTarget(null)
+        }
+      }
+
+      // Enhanced emotional responses
+      if (emotion === "happy") {
+        // Happy dog - tail wagging, slight bounce, happy face
+        setTailWag(Math.sin(time * 5) * 0.6)
+        setBodyBounce(Math.sin(time * 3) * 0.05)
+        setMouthOpen(0.2 + Math.sin(time * 2) * 0.1) // Happy panting
+        setEyebrowRaise(0.1)
+        setTears(0)
+      } else if (emotion === "sad") {
+        // Sad dog - droopy head, slow tail, sad face, tears
+        setHeadTilt(-0.2 + Math.sin(time * 0.3) * 0.05)
+        setTailWag(Math.sin(time * 0.5) * 0.1)
+        setMouthOpen(-0.1 + Math.sin(time * 0.5) * 0.03)
+        setEyebrowRaise(-0.2) // Sad eyebrows
+        setTears(Math.sin(time * 2) * 0.5 + 0.5) // Crying animation
+      } else if (emotion === "excited" || emotion === "dancing") {
+        // Excited dog - jumping, fast tail wag
+        setBodyBounce(Math.sin(time * 4) * 0.08)
+        setTailWag(Math.sin(time * 6) * 0.7)
+        setMouthOpen(0.3 + Math.sin(time * 3) * 0.1) // Excited panting
+        setEyebrowRaise(0.15)
+        setTears(0)
+
+        // For dancing, add rotation
+        if (emotion === "dancing") {
+          setDanceMoves(Math.sin(time * 2) * 0.5)
+          group.current.rotation.y = Math.sin(time * 2) * 0.5
+          group.current.rotation.z = Math.sin(time * 3) * 0.1
+        }
+      } else if (emotion === "curious") {
+        // Curious dog - head tilt, perked ears
+        setHeadTilt(Math.sin(time * 0.5) * 0.3)
+        setEarTwitch(Math.sin(time * 3) * 0.15)
+        setMouthOpen(0.05 + Math.sin(time * 0.5) * 0.05)
+        setEyebrowRaise(0.1)
+        setTears(0)
+      } else if (emotion === "scared") {
+        // Scared dog - cowering, ears back
+        setHeadTilt(-0.1)
+        setBodyBounce(-0.05)
+        setTailWag(0)
+        setEyebrowRaise(-0.1)
+        setTears(0)
+      } else if (emotion === "sleepy") {
+        // Sleepy dog - slow movements, droopy eyes
+        setHeadTilt(-0.1 + Math.sin(time * 0.2) * 0.05)
+        setEyeBlink(0.7 + Math.sin(time * 0.5) * 0.3) // Eyes almost closed
+        setMouthOpen(Math.sin(time * 0.3) * 0.1) // Occasional yawn
+        setBodyBounce(Math.sin(time * 0.5) * 0.02) // Slow breathing
+        setTailWag(Math.sin(time * 0.3) * 0.1) // Minimal tail movement
+      } else if (emotion === "hungry") {
+        // Hungry dog - looking at food, licking lips
+        setHeadTilt(0.1)
+        setMouthOpen(0.1 + Math.sin(time * 2) * 0.1) // Licking lips
+        setTailWag(Math.sin(time * 3) * 0.3) // Medium tail wag
+        setBodyBounce(Math.sin(time * 2) * 0.03) // Slightly excited
+      } else if (emotion === "loving") {
+        // Loving dog - gentle movements, soft eyes
+        setHeadTilt(Math.sin(time * 0.3) * 0.1)
+        setTailWag(Math.sin(time * 2) * 0.4) // Gentle tail wag
+        setMouthOpen(0.1 + Math.sin(time * 0.5) * 0.05) // Slight panting
+        setEyebrowRaise(0.05) // Soft expression
+        setBodyBounce(Math.sin(time * 1) * 0.02) // Calm breathing
+      }
+
+      // Apply animations
+      if (group.current) {
+        // Position from walking
+        group.current.position.x = position[0]
+        group.current.position.z = position[2]
+
+        // Add jump height and body bounce
+        group.current.position.y = position[1] + bodyBounce + jumpHeight
+
+        // Apply dancing rotation if dancing
+        if (emotion === "dancing") {
+          group.current.rotation.z = Math.sin(time * 3) * 0.1
+        } else if (!isWalking) {
+          // Reset rotation if not walking or dancing
+          group.current.rotation.z = 0
+        }
+
+        // Apply breathing scale
+        group.current.scale.set(breathingScale, breathingScale, breathingScale)
+      }
+    }
+  })
+
+  return (
+    <group
+      ref={group}
+      onClick={onInteract}
+      onPointerOver={() => setHovered(true)}
+      onPointerOut={() => setHovered(false)}
+      position={position} // Use position state for walking animation
+    >
+      {/* Main body - more natural proportions */}
+      <group>
+        {/* Torso - horizontal oval shape */}
+        <mesh position={[0, 0.35, 0]} scale={[1, 0.7, 1.4]}>
+          <sphereGeometry args={[0.35, 24, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+
+        {/* Lower body/hip area - properly connected to torso */}
+        <mesh position={[0, 0.3, -0.3]} scale={[0.9, 0.65, 0.7]}>
+          <sphereGeometry args={[0.35, 24, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+
+        {/* Chest - slightly lighter */}
+        <mesh position={[0, 0.2, 0.35]} scale={[0.8, 0.6, 0.6]}>
+          <sphereGeometry args={[0.35, 24, 16]} />
+          <meshStandardMaterial color={lightColor} roughness={0.7} />
+        </mesh>
+
+        {/* Neck - connecting body to head */}
+        <mesh position={[0, 0.45, 0.45]} scale={[0.7, 0.7, 0.5]}>
+          <sphereGeometry args={[0.25, 16, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+
+        {/* Connection points for legs - make them blend with the body */}
+        {/* Front Left Connection */}
+        <mesh position={[-0.2, 0.15, 0.3]} scale={[0.3, 0.3, 0.3]}>
+          <sphereGeometry args={[0.25, 16, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+
+        {/* Front Right Connection */}
+        <mesh position={[0.2, 0.15, 0.3]} scale={[0.3, 0.3, 0.3]}>
+          <sphereGeometry args={[0.25, 16, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+
+        {/* Back Left Connection */}
+        <mesh position={[-0.2, 0.15, -0.3]} scale={[0.3, 0.3, 0.3]}>
+          <sphereGeometry args={[0.25, 16, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+
+        {/* Back Right Connection */}
+        <mesh position={[0.2, 0.15, -0.3]} scale={[0.3, 0.3, 0.3]}>
+          <sphereGeometry args={[0.25, 16, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+
+        {/* Tail connection point */}
+        <mesh position={[0, 0.3, -0.5]} scale={[0.25, 0.25, 0.25]}>
+          <sphereGeometry args={[0.25, 16, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+      </group>
+
+      {/* Head group - properly positioned and sized */}
+      <group position={[0, 0.65, 0.65]} rotation={[headTilt, 0, 0]}>
+        {/* Main head - slightly oval */}
+        <mesh scale={[0.8, 0.75, 0.8]}>
+          <sphereGeometry args={[0.25, 24, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+
+        {/* Eyebrows - fixed position but move for emotions */}
+        <mesh position={[-0.12, 0.12, 0.15]} rotation={[eyebrowRaise, 0, 0]} scale={[0.1, 0.02, 0.05]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color={darkColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0.12, 0.12, 0.15]} rotation={[eyebrowRaise, 0, 0]} scale={[0.1, 0.02, 0.05]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color={darkColor} roughness={0.8} />
+        </mesh>
+
+        {/* Muzzle - properly attached to face */}
+        <group position={[0, -0.05, 0.15]}>
+          {/* Upper muzzle */}
+          <mesh scale={[0.6, 0.4, 0.7]}>
+            <sphereGeometry args={[0.2, 16, 16]} />
+            <meshStandardMaterial color={mainColor} roughness={0.7} />
+          </mesh>
+
+          {/* Lower muzzle/jaw - animated for talking */}
+          <mesh position={[0, -0.08, 0]} rotation={[mouthOpen, 0, 0]} scale={[0.55, 0.3, 0.65]}>
+            <sphereGeometry args={[0.18, 16, 16]} />
+            <meshStandardMaterial color={mainColor} roughness={0.7} />
+          </mesh>
+
+          {/* Nose - black and shiny */}
+          <mesh position={[0, 0, 0.15]}>
+            <sphereGeometry args={[0.06, 16, 16]} />
+            <meshStandardMaterial color="#000000" roughness={0.2} metalness={0.2} />
+          </mesh>
+
+          {/* Mouth line */}
+          <mesh position={[0, -0.1, 0.1]} rotation={[mouthOpen / 2, 0, 0]}>
+            <boxGeometry args={[0.1, 0.01, 0.1]} />
+            <meshStandardMaterial color="#5C4033" roughness={0.3} />
+          </mesh>
+
+          {/* Tongue - visible when mouth open */}
+          {mouthOpen > 0.1 && (
+            <mesh position={[0, -0.12, 0.05]} rotation={[mouthOpen, 0, 0]}>
+              <boxGeometry args={[0.08, 0.02, 0.1]} />
+              <meshStandardMaterial color="#FF6B6B" roughness={0.3} />
+            </mesh>
+          )}
+        </group>
+
+        {/* Eyes with blinking - more realistic with black pupils */}
+        <group position={[-0.12, 0.05, 0.15]}>
+          {/* Eye white */}
+          <mesh scale={[1, 1 - eyeBlink, 1]}>
+            <sphereGeometry args={[0.04, 16, 16]} />
+            <meshStandardMaterial color="#FFFFFF" roughness={0.2} />
+          </mesh>
+          {/* Pupil - black */}
+          <mesh position={[0, 0, 0.02]} scale={[0.6, 0.6 * (1 - eyeBlink), 0.6]}>
+            <sphereGeometry args={[0.03, 16, 16]} />
+            <meshStandardMaterial color="#000000" roughness={0.2} />
+          </mesh>
+
+          {/* Tears for sad emotion */}
+          {tears > 0 && (
+            <mesh position={[0, -0.06, 0.02]} scale={[0.02, tears * 0.1, 0.02]}>
+              <cylinderGeometry args={[1, 1, 1, 8]} />
+              <meshStandardMaterial color="#6495ED" transparent opacity={0.7} />
+            </mesh>
+          )}
+        </group>
+
+        <group position={[0.12, 0.05, 0.15]}>
+          {/* Eye white */}
+          <mesh scale={[1, 1 - eyeBlink, 1]}>
+            <sphereGeometry args={[0.04, 16, 16]} />
+            <meshStandardMaterial color="#FFFFFF" roughness={0.2} />
+          </mesh>
+          {/* Pupil - black */}
+          <mesh position={[0, 0, 0.02]} scale={[0.6, 0.6 * (1 - eyeBlink), 0.6]}>
+            <sphereGeometry args={[0.03, 16, 16]} />
+            <meshStandardMaterial color="#000000" roughness={0.2} />
+          </mesh>
+
+          {/* Tears for sad emotion */}
+          {tears > 0 && (
+            <mesh position={[0, -0.06, 0.02]} scale={[0.02, tears * 0.1, 0.02]}>
+              <cylinderGeometry args={[1, 1, 1, 8]} />
+              <meshStandardMaterial color="#6495ED" transparent opacity={0.7} />
+            </mesh>
+          )}
+        </group>
+
+        {/* Ears - properly positioned on top of head */}
+        <mesh position={[-0.15, 0.18, -0.05]} rotation={[0.2, -0.3 + earTwitch, -0.2]}>
+          <coneGeometry args={[0.08, 0.2, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0.15, 0.18, -0.05]} rotation={[0.2, 0.3 - earTwitch, 0.2]}>
+          <coneGeometry args={[0.08, 0.2, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+
+        {/* Inner ears */}
+        <mesh position={[-0.15, 0.18, -0.05]} rotation={[0.2, -0.3 + earTwitch, -0.2]} scale={[0.7, 0.7, 0.7]}>
+          <coneGeometry args={[0.06, 0.15, 16]} />
+          <meshStandardMaterial color={lightColor} roughness={0.6} />
+        </mesh>
+        <mesh position={[0.15, 0.18, -0.05]} rotation={[0.2, 0.3 - earTwitch, 0.2]} scale={[0.7, 0.7, 0.7]}>
+          <coneGeometry args={[0.06, 0.15, 16]} />
+          <meshStandardMaterial color={lightColor} roughness={0.6} />
+        </mesh>
+      </group>
+
+      {/* Legs - properly positioned and proportioned with walking animation */}
+      {/* Front Left - better connected to body */}
+      <group position={[-0.2, 0, 0.3]}>
+        {/* Connection joint */}
+        <mesh position={[0, 0, 0]} scale={[0.07, 0.07, 0.07]}>
+          <sphereGeometry args={[1, 16, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.15, 0]} rotation={[isWalking ? Math.sin(walkCycle) * 0.5 : legRaise, 0, 0]}>
+          <cylinderGeometry args={[0.06, 0.05, 0.3, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.35, 0]} rotation={[isWalking ? Math.sin(walkCycle) * 0.3 : legRaise / 2, 0, 0]}>
+          <cylinderGeometry args={[0.05, 0.04, 0.25, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.5, 0.02]}>
+          <sphereGeometry args={[0.05, 12, 12]} />
+          <meshStandardMaterial color={darkColor} roughness={0.7} />
+        </mesh>
+      </group>
+
+      {/* Front Right - better connected to body */}
+      <group position={[0.2, 0, 0.3]}>
+        {/* Connection joint */}
+        <mesh position={[0, 0, 0]} scale={[0.07, 0.07, 0.07]}>
+          <sphereGeometry args={[1, 16, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.15, 0]} rotation={[isWalking ? Math.sin(walkCycle + Math.PI) * 0.5 : 0, 0, 0]}>
+          <cylinderGeometry args={[0.06, 0.05, 0.3, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.35, 0]} rotation={[isWalking ? Math.sin(walkCycle + Math.PI) * 0.3 : 0, 0, 0]}>
+          <cylinderGeometry args={[0.05, 0.04, 0.25, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.5, 0.02]}>
+          <sphereGeometry args={[0.05, 12, 12]} />
+          <meshStandardMaterial color={darkColor} roughness={0.7} />
+        </mesh>
+      </group>
+
+      {/* Back Left - better connected to body */}
+      <group position={[-0.2, 0, -0.3]}>
+        {/* Connection joint */}
+        <mesh position={[0, 0, 0]} scale={[0.07, 0.07, 0.07]}>
+          <sphereGeometry args={[1, 16, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.15, 0]} rotation={[isWalking ? Math.sin(walkCycle + Math.PI) * 0.5 : 0, 0, 0]}>
+          <cylinderGeometry args={[0.06, 0.05, 0.3, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.35, 0]} rotation={[isWalking ? Math.sin(walkCycle + Math.PI) * 0.3 : 0, 0, 0]}>
+          <cylinderGeometry args={[0.05, 0.04, 0.25, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.5, 0.02]}>
+          <sphereGeometry args={[0.05, 12, 12]} />
+          <meshStandardMaterial color={darkColor} roughness={0.7} />
+        </mesh>
+      </group>
+
+      {/* Back Right - better connected to body */}
+      <group position={[0.2, 0, -0.3]}>
+        {/* Connection joint */}
+        <mesh position={[0, 0, 0]} scale={[0.07, 0.07, 0.07]}>
+          <sphereGeometry args={[1, 16, 16]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.15, 0]} rotation={[isWalking ? Math.sin(walkCycle) * 0.5 : 0, 0, 0]}>
+          <cylinderGeometry args={[0.06, 0.05, 0.3, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.35, 0]} rotation={[isWalking ? Math.sin(walkCycle) * 0.3 : 0, 0, 0]}>
+          <cylinderGeometry args={[0.05, 0.04, 0.25, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.5, 0.02]}>
+          <sphereGeometry args={[0.05, 12, 12]} />
+          <meshStandardMaterial color={darkColor} roughness={0.7} />
+        </mesh>
+      </group>
+
+      {/* Tail - properly connected to body */}
+      <group position={[0, 0.3, -0.5]} rotation={[0.5, tailWag, 0]}>
+        <mesh position={[0, 0, -0.1]}>
+          <cylinderGeometry args={[0.05, 0.03, 0.25, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, 0, -0.25]} rotation={[0.2, 0, 0]}>
+          <cylinderGeometry args={[0.03, 0.02, 0.2, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, 0.05, -0.35]}>
+          <sphereGeometry args={[0.025, 12, 12]} />
+          <meshStandardMaterial color={mainColor} roughness={0.7} />
+        </mesh>
+      </group>
+
+      {/* Hover tooltip */}
+      {hovered && (
+        <Html position={[0, 1.2, 0]}>
+          <div className="bg-black/50 text-white px-2 py-1 rounded text-sm whitespace-nowrap">Click to interact!</div>
+        </Html>
+      )}
+    </group>
+  )
+}
